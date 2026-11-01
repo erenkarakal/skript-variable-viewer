@@ -1,0 +1,231 @@
+﻿<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skript Variable Viewer</title>
+  <meta name="description" content="Read a Skript variables.csv and decode every stored value locally.">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f2f5f0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self' file: blob:; worker-src blob:; style-src 'self' file:; img-src data: 'self' file:; font-src 'self' file:; connect-src 'none'">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div id="app">
+    <header class="topbar">
+      <a class="brand" href="" title="Reload the page">
+        <svg class="mark" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"
+          stroke-linecap="round">
+          <path d="M8.2 3.2c-1.6 0-1.8 1.4-1.8 3 0 1.8-.4 3-2 3.8 1.6.8 2 2 2 3.8 0 1.6.2 3 1.8 3" />
+          <path d="M11.8 3.2c1.6 0 1.8 1.4 1.8 3 0 1.8.4 3 2 3.8-1.6.8-2 2-2 3.8 0 1.6-.2 3-1.8 3" />
+          <circle cx="10" cy="10" r="1.4" fill="currentColor" stroke="none" />
+        </svg>
+        <span class="brand-name">Skript Variable Viewer</span>
+      </a>
+      <div class="scope hidden" id="scope">
+        <span class="scope-name" id="fileName"></span>
+        <span class="scope-meta" id="fileMeta"></span>
+        <span class="scope-product" aria-hidden="true">Skript Variable Viewer</span>
+      </div>
+      <div class="topbar-end">
+        <button id="openBtn" class="btn btn-quiet hidden" type="button">Open file</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="welcome" class="sheet welcome">
+        <div id="dropCard" class="dropzone">
+          <div class="drop-inner">
+            <h1 id="appTitle">Drop variables.csv</h1>
+            <p class="lead">Runs locally. The variables are never uploaded to a server.</p>
+            <div class="drop-actions">
+              <button id="pickBtn" class="btn btn-primary" type="button">Select variables.csv</button>
+              <span class="alt">or drag the file anywhere</span>
+            </div>
+            <div id="parseProgress" class="parse-box hidden">
+              <span class="track"><span class="bar"></span></span>
+              <div class="parse-label"><span class="pct"></span></div>
+            </div>
+            <div id="parseLabel" class="parse-box parse-label"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="workspace" class="sheet workspace hidden">
+        <div class="head">
+          <div class="head-main">
+            <div id="titleSlot"></div>
+            <p class="sub" id="screenSub">No file loaded.</p>
+          </div>
+          <nav class="views" aria-label="Views">
+            <button class="view" id="viewBtn-variables" type="button" data-tab="variables" aria-current="true">Variables
+              <span class="count" id="tabVarCount">0</span></button>
+            <button class="view" id="viewBtn-types" type="button" data-tab="types">Types <span class="count"
+                id="tabTypeCount">0</span></button>
+            <button class="view" id="viewBtn-issues" type="button" data-tab="issues">Issues <span class="count"
+                id="tabIssueCount">0</span></button>
+          </nav>
+        </div>
+
+        <div id="tab-variables" class="tab-panel">
+          <div class="toolbar" id="toolbar">
+            <div class="search">
+              <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round">
+                <circle cx="7" cy="7" r="4.25" />
+                <path d="M10.2 10.2 13.5 13.5" />
+              </svg>
+              <input id="search" type="search" placeholder="Search name or type" autocomplete="off" spellcheck="false"
+                aria-label="Search variable names and types">
+            </div>
+            <button id="filtersBtn" class="btn filters-toggle" type="button" aria-expanded="false"
+              aria-controls="filters">Filters</button>
+            <div class="filters" id="filters">
+              <label class="check" title="Also search the decoded values. Slower on large files."><input
+                  id="searchValues" type="checkbox"> Search values</label>
+              <select id="typeFilter" aria-label="Filter by type">
+                <option value="">All types</option>
+              </select>
+              <select id="sortKey" aria-label="Sort by">
+                <option value="name">Sort: name</option>
+                <option value="type">Sort: type</option>
+                <option value="line">Sort: line</option>
+                <option value="size">Sort: payload size</option>
+              </select>
+              <button id="sortDir" class="btn btn-icon" type="button"
+                aria-label="Sorted ascending, switch to descending" title="Switch sort direction"
+                data-dir="asc">â†‘</button>
+            </div>
+            <div class="spacer"></div>
+            <div class="menu-wrap">
+              <button id="exportBtn" class="btn" type="button" aria-expanded="false" aria-controls="exportMenu">Export
+                <svg viewBox="0 0 12 12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"
+                  stroke-linecap="round">
+                  <path d="m3 4.5 3 3 3-3" />
+                </svg>
+              </button>
+              <div id="exportMenu" class="menu hidden">
+                <button id="exportJson" type="button">Export JSON</button>
+                <button id="exportCsv" type="button">Export CSV</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="split" id="split">
+            <div class="list-pane">
+              <div class="list-head" aria-hidden="true">
+                <div class="c-line">Line</div>
+                <div>Variable</div>
+                <div class="c-type">Type</div>
+                <div>Decoded value</div>
+                <div class="c-size">Bytes</div>
+              </div>
+              <div id="listScroller" class="list-scroller" tabindex="0" role="listbox" aria-label="Variables">
+                <div class="list-spacer" id="listSpacer">
+                  <div class="list-rows" id="listRows"></div>
+                </div>
+              </div>
+              <button id="jumpTop" class="jump-top" type="button" aria-label="Jump to top" title="Jump to top" hidden>
+                <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 13V3.5M3.5 8 8 3.5 12.5 8" />
+                </svg>
+              </button>
+            </div>
+            <aside id="detail" class="detail-pane" aria-label="Variable detail"></aside>
+          </div>
+        </div>
+
+        <div id="tab-types" class="tab-panel hidden">
+          <div class="table-head">
+            <div>Every type stored in this file, and how many variables use it. Choose one to filter the list.</div>
+          </div>
+          <div class="table-scroll">
+            <table class="grid types-table" id="typesTable">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>What it holds</th>
+                  <th class="num">Variables</th>
+                  <th class="num">Payload bytes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-issues" class="tab-panel hidden">
+          <div class="table-head">
+            <div>Malformed rows, invalid hex and decode warnings.</div>
+            <button id="scanBtn" class="btn" type="button">Scan all values</button>
+          </div>
+          <div class="table-scroll">
+            <table class="grid" id="issuesTable">
+              <thead>
+                <tr>
+                  <th class="num">Line</th>
+                  <th>Kind</th>
+                  <th>Variable</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <div class="issue-legend">
+              <div>
+                <h3>Malformed line</h3>
+                <p>The line does not hold exactly three CSV fields: name, type and value.</p>
+              </div>
+              <div>
+                <h3>Invalid hex</h3>
+                <p>The value is not an even-length hexadecimal payload, so it cannot be decoded.</p>
+              </div>
+              <div>
+                <h3>Decode error</h3>
+                <p>The payload could not be read as the type named in the file.</p>
+              </div>
+              <div>
+                <h3>Trailing bytes</h3>
+                <p>The value decoded, but bytes were left unread at its end.</p>
+              </div>
+            </div>
+            <div class="scan-report">
+              <div class="scan-figures">
+                <div><span>Values scanned</span><strong id="scanCount">â€“</strong></div>
+                <div><span>Decoded cleanly</span><strong id="scanOk">â€“</strong></div>
+                <div><span>With warnings</span><strong id="scanWarn">â€“</strong></div>
+              </div>
+              <p class="note" id="scanNote">A scan decodes every payload, not just the rows on screen.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <span id="statusText"></span>
+      <span id="progressWrap" class="progress hidden"><span class="track"><span class="bar"></span></span><span
+          class="pct"></span></span>
+    </footer>
+  </div>
+
+  <input id="fileInput" type="file" accept=".csv,text/csv,text/plain" class="sr-only">
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <script src="src/core.js" defer></script>
+  <script src="src/views.js" defer></script>
+  <script src="src/list.js" defer></script>
+  <script src="src/detail.js" defer></script>
+  <script src="src/tables.js" defer></script>
+  <script src="src/filters.js" defer></script>
+  <script src="src/decoder.js" defer></script>
+  <script src="src/worker.js" defer></script>
+  <script src="src/engine.js" defer></script>
+  <script src="src/main.js" defer></script>
+</body>
+
+</html>
